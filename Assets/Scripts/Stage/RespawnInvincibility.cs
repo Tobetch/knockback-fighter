@@ -23,12 +23,12 @@ public class RespawnInvincibility : MonoBehaviour
     {
         if (!IsInvincible)
         {
-            return;
-        }
+            if (!blinkVisible)
+            {
+                blinkVisible = true;
+                SetBlinkVisible(true);
+            }
 
-        if (Time.time >= invincibleUntilTime)
-        {
-            SetBlinkVisible(true);
             return;
         }
 
