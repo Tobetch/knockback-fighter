@@ -7,8 +7,8 @@ public static class DummyEnemyBootstrap
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void EnsureDummyEnemyExists()
     {
-        PlayerMovement player = Object.FindFirstObjectByType<PlayerMovement>();
-        Hurtbox existingHurtbox = Object.FindFirstObjectByType<Hurtbox>();
+        PlayerMovement player = Object.FindAnyObjectByType<PlayerMovement>();
+        Hurtbox existingHurtbox = Object.FindAnyObjectByType<Hurtbox>();
         if (existingHurtbox != null)
         {
             EnsureFallRespawn(existingHurtbox.TargetRigidbody != null ? existingHurtbox.TargetRigidbody.gameObject : existingHurtbox.gameObject);

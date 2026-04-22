@@ -5,13 +5,13 @@ public static class RespawnBootstrap
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void EnsureRespawnComponentExists()
     {
-        PlayerMovement player = Object.FindFirstObjectByType<PlayerMovement>();
+        PlayerMovement player = Object.FindAnyObjectByType<PlayerMovement>();
         if (player != null)
         {
             EnsureFallRespawn(player.gameObject);
         }
 
-        Hurtbox[] hurtboxes = Object.FindObjectsByType<Hurtbox>(FindObjectsSortMode.None);
+        Hurtbox[] hurtboxes = Object.FindObjectsByType<Hurtbox>();
         for (int i = 0; i < hurtboxes.Length; i++)
         {
             Hurtbox hurtbox = hurtboxes[i];
