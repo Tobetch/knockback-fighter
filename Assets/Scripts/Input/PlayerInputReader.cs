@@ -22,7 +22,10 @@ public class PlayerInputReader : MonoBehaviour
         controls.Player.Move.performed += OnMovePerformed;
         controls.Player.Move.canceled += OnMoveCanceled;
 
+        // Jump は `started` だけだと環境/設定（interactions や press 判定）によって取りこぼすことがある。
+        // `performed` も拾って「押された」事実を確実にバッファへ載せる（ジャンプ可否は Movement 側が判定）。
         controls.Player.Jump.started += OnJumpStarted;
+        controls.Player.Jump.performed += OnJumpPerformed;
         controls.Player.Attack.performed += OnAttackPerformed;
     }
 
@@ -32,6 +35,7 @@ public class PlayerInputReader : MonoBehaviour
         controls.Player.Move.canceled -= OnMoveCanceled;
 
         controls.Player.Jump.started -= OnJumpStarted;
+        controls.Player.Jump.performed -= OnJumpPerformed;
         controls.Player.Attack.performed -= OnAttackPerformed;
 
         controls.Player.Disable();
@@ -74,6 +78,11 @@ public class PlayerInputReader : MonoBehaviour
     }
 
     private void OnJumpStarted(InputAction.CallbackContext context)
+    {
+        jumpPressedTime = Time.time;
+    }
+
+    private void OnJumpPerformed(InputAction.CallbackContext context)
     {
         jumpPressedTime = Time.time;
     }
