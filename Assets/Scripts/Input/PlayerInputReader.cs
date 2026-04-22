@@ -7,7 +7,7 @@ public class PlayerInputReader : MonoBehaviour
 
     public Vector2 Move { get; private set; }
 
-    private bool jumpPressed;
+    private float jumpPressedTime = float.NegativeInfinity;
     private bool attackPressed;
 
     private void Awake()
@@ -22,7 +22,7 @@ public class PlayerInputReader : MonoBehaviour
         controls.Player.Move.performed += OnMovePerformed;
         controls.Player.Move.canceled += OnMoveCanceled;
 
-        controls.Player.Jump.performed += OnJumpPerformed;
+        controls.Player.Jump.started += OnJumpStarted;
         controls.Player.Attack.performed += OnAttackPerformed;
     }
 
@@ -31,21 +31,25 @@ public class PlayerInputReader : MonoBehaviour
         controls.Player.Move.performed -= OnMovePerformed;
         controls.Player.Move.canceled -= OnMoveCanceled;
 
-        controls.Player.Jump.performed -= OnJumpPerformed;
+        controls.Player.Jump.started -= OnJumpStarted;
         controls.Player.Attack.performed -= OnAttackPerformed;
 
         controls.Player.Disable();
     }
 
-    public bool ConsumeJumpPressed()
+    public bool HasBufferedJump(float bufferTime)
     {
-        if (!jumpPressed)
-        {
-            return false;
-        }
+        return Time.time - jumpPressedTime <= bufferTime;
+    }
 
-        jumpPressed = false;
-        return true;
+    public void ConsumeJumpPressed()
+    {
+        jumpPressedTime = float.NegativeInfinity;
+    }
+
+    public void ClearJumpPressed()
+    {
+        jumpPressedTime = float.NegativeInfinity;
     }
 
     public bool ConsumeAttackPressed()
@@ -69,9 +73,9 @@ public class PlayerInputReader : MonoBehaviour
         Move = Vector2.zero;
     }
 
-    private void OnJumpPerformed(InputAction.CallbackContext context)
+    private void OnJumpStarted(InputAction.CallbackContext context)
     {
-        jumpPressed = true;
+        jumpPressedTime = Time.time;
     }
 
     private void OnAttackPerformed(InputAction.CallbackContext context)
