@@ -16,7 +16,6 @@ public class FollowCamera : MonoBehaviour
     [SerializeField] private Vector3 offset = new Vector3(0f, 6f, -8f);
 
     [Header("Side View")]
-    [SerializeField] private float sideDistance = 12f;
     [SerializeField] private float sideHeight = 6f;
     [SerializeField] private float lockedAxisValue = -12f;
     [SerializeField] private bool lockRotationInSideView = true;
