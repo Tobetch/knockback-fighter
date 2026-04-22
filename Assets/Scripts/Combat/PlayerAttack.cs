@@ -10,15 +10,18 @@ public class PlayerAttack : MonoBehaviour
     [Header("Timing")]
     [SerializeField] private float attackActiveTime = 0.12f;
     [SerializeField] private float attackCooldown = 0.2f;
+    [SerializeField] private float lungeDistance = 0.35f;
+    [SerializeField] private float lungeDuration = 0.06f;
 
     [Header("Knockback")]
     [SerializeField] private float knockbackHorizontalSpeed = 8f;
     [SerializeField] private float knockbackVerticalSpeed = 2.5f;
 
     [Header("Hit Detection Fallback")]
-    [SerializeField] private float fallbackHitRadius = 1.15f;
-    [SerializeField] private float fallbackHitSideOffset = 0.9f;
+    [SerializeField] private float fallbackHitRadius = 0.62f;
+    [SerializeField] private float fallbackHitSideOffset = 0.66f;
     [SerializeField] private float fallbackHitHeightOffset = 0.25f;
+    [SerializeField] private float maxHitDistanceFromAttackCenter = 0.62f;
 
     [Header("Attack Visual")]
     [SerializeField] private bool showAttackIndicator = true;
@@ -28,27 +31,42 @@ public class PlayerAttack : MonoBehaviour
     private PlayerInputReader inputReader;
     private float attackEndTime = float.NegativeInfinity;
     private float nextAttackTime = float.NegativeInfinity;
+    private float lungeStartTime = float.NegativeInfinity;
+    private Vector3 lungeStartPosition;
+    private Vector3 lungeTargetPosition;
+    private bool lungeActive;
+    private Rigidbody selfRigidbody;
 
     private readonly HashSet<Hurtbox> hitThisAttack = new();
     private readonly Collider[] fallbackHitResults = new Collider[16];
     private GameObject attackIndicator;
     private Renderer attackIndicatorRenderer;
     private float attackIndicatorHideTime = float.NegativeInfinity;
+    private PenguinAttackFlap penguinAttackFlap;
 
     private void Awake()
     {
         inputReader = GetComponent<PlayerInputReader>();
+        selfRigidbody = GetComponent<Rigidbody>();
 
         // SerializeField はシーン側に保存された値が優先されるため、
         // デフォルトを書き換えても見た目が変わらないことがある。
-        // 弱攻撃の「真横」寄りを維持するため、高さは安全側で上限をかける。
+        // 弱攻撃の「真横・翼先端」寄りを維持するため、安全側で上限をかける。
+        fallbackHitRadius = Mathf.Min(fallbackHitRadius, 0.72f);
+        fallbackHitSideOffset = Mathf.Min(fallbackHitSideOffset, 0.78f);
         fallbackHitHeightOffset = Mathf.Min(fallbackHitHeightOffset, 0.1f);
+        // ヒット距離ガードは球半径と合わせると見た目とのズレが出にくい。
+        maxHitDistanceFromAttackCenter = Mathf.Clamp(maxHitDistanceFromAttackCenter, 0.35f, 0.9f);
+        maxHitDistanceFromAttackCenter = Mathf.Max(maxHitDistanceFromAttackCenter, fallbackHitRadius);
+        lungeDistance = Mathf.Clamp(lungeDistance, 0f, 0.6f);
+        lungeDuration = Mathf.Clamp(lungeDuration, 0.01f, 0.2f);
 
         if (hitbox == null)
         {
             hitbox = GetComponentInChildren<Hitbox>();
         }
 
+        penguinAttackFlap = GetComponentInChildren<PenguinAttackFlap>(true);
         SetupAttackIndicator();
     }
 
@@ -63,6 +81,7 @@ public class PlayerAttack : MonoBehaviour
 
         if (IsAttacking())
         {
+            UpdateAttackLunge();
             TryHitByFallbackOverlap();
             UpdateAttackIndicatorTransform();
 
@@ -100,10 +119,17 @@ public class PlayerAttack : MonoBehaviour
 
     private void BeginAttack()
     {
+        if (penguinAttackFlap == null)
+        {
+            penguinAttackFlap = GetComponentInChildren<PenguinAttackFlap>(true);
+        }
+
         hitThisAttack.Clear();
         hitbox.Enabled = true;
         attackEndTime = Time.time + attackActiveTime;
         nextAttackTime = Time.time + attackCooldown;
+        penguinAttackFlap?.PlaySlap();
+        BeginAttackLunge();
         UpdateAttackIndicatorTransform();
         SetAttackIndicatorVisible(true);
         attackIndicatorHideTime = Time.time + Mathf.Max(0f, attackIndicatorDuration);
@@ -113,7 +139,44 @@ public class PlayerAttack : MonoBehaviour
     {
         hitbox.Enabled = false;
         attackEndTime = float.NegativeInfinity;
+        lungeActive = false;
         SetAttackIndicatorVisible(false);
+    }
+
+    private void BeginAttackLunge()
+    {
+        Vector3 side = GetSideFacingDirection();
+        lungeStartPosition = transform.position;
+        lungeTargetPosition = lungeStartPosition + side * lungeDistance;
+        lungeTargetPosition.y = lungeStartPosition.y;
+        lungeTargetPosition.z = lungeStartPosition.z;
+        lungeStartTime = Time.time;
+        lungeActive = lungeDistance > 0.0001f && lungeDuration > 0.0001f;
+    }
+
+    private void UpdateAttackLunge()
+    {
+        if (!lungeActive)
+        {
+            return;
+        }
+
+        float t = Mathf.Clamp01((Time.time - lungeStartTime) / lungeDuration);
+        Vector3 nextPosition = Vector3.Lerp(lungeStartPosition, lungeTargetPosition, t);
+
+        if (selfRigidbody != null && !selfRigidbody.isKinematic)
+        {
+            selfRigidbody.MovePosition(nextPosition);
+        }
+        else
+        {
+            transform.position = nextPosition;
+        }
+
+        if (t >= 1f)
+        {
+            lungeActive = false;
+        }
     }
 
     private bool IsAttacking()
@@ -190,6 +253,11 @@ public class PlayerAttack : MonoBehaviour
             return;
         }
 
+        if (!IsWithinAttackRange(hurtbox))
+        {
+            return;
+        }
+
         Rigidbody targetRb = hurtbox.TargetRigidbody;
         if (targetRb == null)
         {
@@ -204,6 +272,18 @@ public class PlayerAttack : MonoBehaviour
         Vector3 attackDirection = GetSideFacingDirection();
         Vector3 knockVelocity = attackDirection * knockbackHorizontalSpeed + Vector3.up * knockbackVerticalSpeed;
         targetRb.linearVelocity = knockVelocity;
+    }
+
+    private bool IsWithinAttackRange(Hurtbox hurtbox)
+    {
+        Transform target = hurtbox.transform;
+        Vector3 attackCenter = transform.position
+                               + Vector3.up * fallbackHitHeightOffset
+                               + GetFlatSideDirection() * fallbackHitSideOffset;
+
+        Vector3 toTarget = target.position - attackCenter;
+        toTarget.z = 0f; // サイドビューの奥行き誤差は無視
+        return toTarget.sqrMagnitude <= maxHitDistanceFromAttackCenter * maxHitDistanceFromAttackCenter;
     }
 
     private Vector3 GetFlatForward()

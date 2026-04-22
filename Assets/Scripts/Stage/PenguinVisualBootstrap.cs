@@ -119,6 +119,12 @@ public static class PenguinVisualBootstrap
             }
 
             facing.Initialize(anchor);
+
+            PenguinAttackFlap flap = visualInstance.GetComponent<PenguinAttackFlap>();
+            if (flap == null)
+            {
+                visualInstance.AddComponent<PenguinAttackFlap>();
+            }
         }
     }
 }
