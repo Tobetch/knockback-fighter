@@ -11,6 +11,7 @@ public static class DummyEnemyBootstrap
         Hurtbox existingHurtbox = Object.FindFirstObjectByType<Hurtbox>();
         if (existingHurtbox != null)
         {
+            EnsureFallRespawn(existingHurtbox.TargetRigidbody != null ? existingHurtbox.TargetRigidbody.gameObject : existingHurtbox.gameObject);
             AlignPlayerTowards(player, existingHurtbox.transform.position);
             return;
         }
@@ -29,6 +30,7 @@ public static class DummyEnemyBootstrap
         rb.constraints = RigidbodyConstraints.FreezeRotationX | RigidbodyConstraints.FreezeRotationZ;
 
         dummy.AddComponent<Hurtbox>();
+        EnsureFallRespawn(dummy);
         AlignPlayerTowards(player, dummy.transform.position);
     }
 
@@ -47,5 +49,15 @@ public static class DummyEnemyBootstrap
 
         float sign = xDelta >= 0f ? 1f : -1f;
         player.transform.rotation = Quaternion.LookRotation(Vector3.right * sign, Vector3.up);
+    }
+
+    private static void EnsureFallRespawn(GameObject target)
+    {
+        if (target == null || target.GetComponent<FallRespawn>() != null)
+        {
+            return;
+        }
+
+        target.AddComponent<FallRespawn>();
     }
 }

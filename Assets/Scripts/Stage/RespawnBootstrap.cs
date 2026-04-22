@@ -6,16 +6,31 @@ public static class RespawnBootstrap
     private static void EnsureRespawnComponentExists()
     {
         PlayerMovement player = Object.FindFirstObjectByType<PlayerMovement>();
-        if (player == null)
+        if (player != null)
+        {
+            EnsureFallRespawn(player.gameObject);
+        }
+
+        Hurtbox[] hurtboxes = Object.FindObjectsByType<Hurtbox>(FindObjectsSortMode.None);
+        for (int i = 0; i < hurtboxes.Length; i++)
+        {
+            Hurtbox hurtbox = hurtboxes[i];
+            if (hurtbox == null || hurtbox.TargetRigidbody == null)
+            {
+                continue;
+            }
+
+            EnsureFallRespawn(hurtbox.TargetRigidbody.gameObject);
+        }
+    }
+
+    private static void EnsureFallRespawn(GameObject target)
+    {
+        if (target == null || target.GetComponent<FallRespawn>() != null)
         {
             return;
         }
 
-        if (player.GetComponent<FallRespawn>() != null)
-        {
-            return;
-        }
-
-        player.gameObject.AddComponent<FallRespawn>();
+        target.AddComponent<FallRespawn>();
     }
 }

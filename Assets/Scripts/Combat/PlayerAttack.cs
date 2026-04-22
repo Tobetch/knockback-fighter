@@ -180,6 +180,11 @@ public class PlayerAttack : MonoBehaviour
             return;
         }
 
+        if (hurtbox.IsInvincible)
+        {
+            return;
+        }
+
         if (!hitThisAttack.Add(hurtbox))
         {
             return;
