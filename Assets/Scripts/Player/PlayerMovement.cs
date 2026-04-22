@@ -35,6 +35,12 @@ public class PlayerMovement : MonoBehaviour
         rb = GetComponent<Rigidbody>();
         capsuleCollider = GetComponent<CapsuleCollider>();
         inputReader = GetComponent<PlayerInputReader>();
+
+        // NOTE:
+        // `groundCheckExtraDistance` は SerializeField なので、シーン/Prefab 側に古い値が保存されていると
+        // コード上のデフォルトを変えても反映されません。短すぎる値だと grounded が永遠に取れず、
+        // 「入力は入っているのにジャンプできない」が再発します。最小値にクランプして安全側に倒します。
+        groundCheckExtraDistance = Mathf.Max(groundCheckExtraDistance, 0.35f);
     }
 
     private void FixedUpdate()
