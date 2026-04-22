@@ -5,7 +5,13 @@ using UnityEngine;
 [RequireComponent(typeof(PlayerInputReader))]
 public class PlayerMovement : MonoBehaviour
 {
-    [SerializeField] private float moveSpeed = 6f;
+    [SerializeField] private float walkSpeed = 4f;
+    [SerializeField] private float dashSpeed = 8f;
+    [SerializeField] private float walkInputDeadzone = 0.2f;
+    [SerializeField] private float flickEngageThreshold = 0.75f;
+    [SerializeField] private float flickStartThreshold = 0.45f;
+    [SerializeField] private float flickMinInputSpeed = 14f;
+    [SerializeField] private float flickBufferTime = 0.06f;
     [SerializeField] private float jumpVelocity = 7f;
     // 接地チェック距離が短すぎると、コライダー/床の厚み・物理の微小な浮きで grounded が取れず、
     // 「入力は入っているのにジャンプできない」が再発しやすい。まずは厚めのデフォルトで安定優先。
@@ -13,7 +19,6 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] private float maxGroundAngle = 55f;
     [SerializeField] private LayerMask groundLayers = ~0;
     [SerializeField] private bool rotateToMoveDirection = true;
-    [SerializeField] private float moveDeadzone = 0.2f;
     [SerializeField] private float jumpBufferTime = 0.15f;
     [SerializeField] private float coyoteTime = 0.08f;
     [SerializeField] private float jumpMinTimeBetweenJumps = 0.08f;
@@ -31,6 +36,11 @@ public class PlayerMovement : MonoBehaviour
     private float lastJumpTime = float.NegativeInfinity;
     private float lockedZPosition;
     private float facingXSign = 1f;
+    private float previousRawMoveInputX;
+    private bool isDashing;
+    private float dashDirectionSign;
+    private float flickBufferedUntil = float.NegativeInfinity;
+    private float flickBufferedDirectionSign;
     private int remainingAirJumps;
     private readonly Collider[] overlapResults = new Collider[8];
     private readonly RaycastHit[] castHits = new RaycastHit[8];
@@ -45,6 +55,13 @@ public class PlayerMovement : MonoBehaviour
         // `groundCheckExtraDistance` は SerializeField なので、シーン/Prefab 側に古い値が保存されていると
         // コード上のデフォルトを変えても反映されません。短すぎる値だと grounded が永遠に取れず、
         // 「入力は入っているのにジャンプできない」が再発します。最小値にクランプして安全側に倒します。
+        walkSpeed = Mathf.Max(0f, walkSpeed);
+        dashSpeed = Mathf.Max(walkSpeed, dashSpeed);
+        walkInputDeadzone = Mathf.Clamp(walkInputDeadzone, 0.05f, 0.4f);
+        flickEngageThreshold = Mathf.Clamp(flickEngageThreshold, 0.5f, 0.99f);
+        flickStartThreshold = Mathf.Clamp(flickStartThreshold, 0.05f, flickEngageThreshold - 0.05f);
+        flickMinInputSpeed = Mathf.Clamp(flickMinInputSpeed, 1f, 50f);
+        flickBufferTime = Mathf.Clamp(flickBufferTime, 0.02f, 0.3f);
         groundCheckExtraDistance = Mathf.Max(groundCheckExtraDistance, 0.35f);
         maxAirJumps = Mathf.Max(0, maxAirJumps);
         remainingAirJumps = maxAirJumps;
@@ -54,9 +71,10 @@ public class PlayerMovement : MonoBehaviour
 
     private void FixedUpdate()
     {
-        Vector2 moveInput = inputReader.Move;
+        Vector2 rawMoveInput = inputReader.Move;
+        Vector2 moveInput = rawMoveInput;
 
-        if (moveInput.magnitude < moveDeadzone)
+        if (moveInput.magnitude < walkInputDeadzone)
         {
             moveInput = Vector2.zero;
         }
@@ -64,12 +82,66 @@ public class PlayerMovement : MonoBehaviour
         Vector3 moveDirection = lockToSideViewAxis
             ? new Vector3(moveInput.x, 0f, 0f)
             : new Vector3(moveInput.x, 0f, moveInput.y);
+        bool isGrounded = IsGrounded(out lastGroundHit);
+
+        float dt = Mathf.Max(Time.fixedDeltaTime, 0.0001f);
+        float currentInputX = rawMoveInput.x;
+        float inputAbs = Mathf.Abs(currentInputX);
+        float previousAbs = Mathf.Abs(previousRawMoveInputX);
+        float inputSpeed = Mathf.Abs(currentInputX - previousRawMoveInputX) / dt;
+
+        float inputSign = Mathf.Abs(currentInputX) > 0.0001f ? Mathf.Sign(currentInputX) : 0f;
+        bool flickDetected =
+            isGrounded &&
+            inputSign != 0f &&
+            previousAbs <= flickStartThreshold &&
+            inputAbs >= flickStartThreshold &&
+            inputSpeed >= flickMinInputSpeed;
+
+        if (flickDetected)
+        {
+            flickBufferedDirectionSign = inputSign;
+            flickBufferedUntil = Time.time + flickBufferTime;
+        }
+
+        bool canStartDash =
+            isGrounded &&
+            Time.time <= flickBufferedUntil &&
+            flickBufferedDirectionSign != 0f &&
+            inputSign == flickBufferedDirectionSign &&
+            inputAbs >= flickEngageThreshold;
+
+        if (!isDashing && canStartDash)
+        {
+            dashDirectionSign = flickBufferedDirectionSign;
+            isDashing = true;
+            flickBufferedUntil = float.NegativeInfinity;
+            flickBufferedDirectionSign = 0f;
+        }
+
+        if (isDashing && (inputAbs <= walkInputDeadzone || inputSign != dashDirectionSign))
+        {
+            isDashing = false;
+            dashDirectionSign = 0f;
+        }
+
+        float currentMoveSpeed = 0f;
+        if (isDashing)
+        {
+            moveDirection.x = dashDirectionSign;
+            currentMoveSpeed = dashSpeed;
+        }
+        else if (inputAbs > walkInputDeadzone)
+        {
+            float normalizedWalk = Mathf.InverseLerp(walkInputDeadzone, flickEngageThreshold, inputAbs);
+            currentMoveSpeed = Mathf.Lerp(0f, walkSpeed, normalizedWalk);
+        }
 
         Vector3 velocity = rb.linearVelocity;
-        velocity.x = moveDirection.x * moveSpeed;
-        velocity.z = lockToSideViewAxis ? 0f : moveDirection.z * moveSpeed;
+        velocity.x = moveDirection.x * currentMoveSpeed;
+        velocity.z = lockToSideViewAxis ? 0f : moveDirection.z * currentMoveSpeed;
+        previousRawMoveInputX = currentInputX;
 
-        bool isGrounded = IsGrounded(out lastGroundHit);
         if (isGrounded)
         {
             lastGroundedTime = Time.time;
