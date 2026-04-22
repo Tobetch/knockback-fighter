@@ -248,12 +248,12 @@ public class PlayerAttack : MonoBehaviour
             return;
         }
 
-        if (!hitThisAttack.Add(hurtbox))
+        if (!IsWithinAttackRange(hurtbox))
         {
             return;
         }
 
-        if (!IsWithinAttackRange(hurtbox))
+        if (!hitThisAttack.Add(hurtbox))
         {
             return;
         }

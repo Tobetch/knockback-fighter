@@ -17,6 +17,7 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] private float jumpBufferTime = 0.15f;
     [SerializeField] private float coyoteTime = 0.08f;
     [SerializeField] private float jumpMinTimeBetweenJumps = 0.08f;
+    [SerializeField] private int maxAirJumps = 1;
     [SerializeField] private bool drawGroundCheckGizmos = true;
     [SerializeField] private bool lockToSideViewAxis = true;
 
@@ -30,6 +31,7 @@ public class PlayerMovement : MonoBehaviour
     private float lastJumpTime = float.NegativeInfinity;
     private float lockedZPosition;
     private float facingXSign = 1f;
+    private int remainingAirJumps;
     private readonly Collider[] overlapResults = new Collider[8];
     private readonly RaycastHit[] castHits = new RaycastHit[8];
 
@@ -44,6 +46,8 @@ public class PlayerMovement : MonoBehaviour
         // コード上のデフォルトを変えても反映されません。短すぎる値だと grounded が永遠に取れず、
         // 「入力は入っているのにジャンプできない」が再発します。最小値にクランプして安全側に倒します。
         groundCheckExtraDistance = Mathf.Max(groundCheckExtraDistance, 0.35f);
+        maxAirJumps = Mathf.Max(0, maxAirJumps);
+        remainingAirJumps = maxAirJumps;
         lockedZPosition = transform.position.z;
         facingXSign = transform.forward.x >= 0f ? 1f : -1f;
     }
@@ -69,16 +73,27 @@ public class PlayerMovement : MonoBehaviour
         if (isGrounded)
         {
             lastGroundedTime = Time.time;
+            remainingAirJumps = maxAirJumps;
         }
 
         bool canUseCoyote = Time.time - lastGroundedTime <= coyoteTime;
         bool canJumpAgain = Time.time - lastJumpTime >= jumpMinTimeBetweenJumps;
+        bool hasBufferedJump = inputReader.HasBufferedJump(jumpBufferTime);
+        bool usedGroundJump = canUseCoyote;
+        bool usedAirJump = !usedGroundJump && remainingAirJumps > 0;
 
-        if (canUseCoyote && canJumpAgain && inputReader.HasBufferedJump(jumpBufferTime))
+        if (canJumpAgain && hasBufferedJump && (usedGroundJump || usedAirJump))
         {
             inputReader.ConsumeJumpPressed();
             velocity.y = jumpVelocity;
-            lastGroundedTime = float.NegativeInfinity;
+            if (usedGroundJump)
+            {
+                lastGroundedTime = float.NegativeInfinity;
+            }
+            else
+            {
+                remainingAirJumps--;
+            }
             lastJumpTime = Time.time;
         }
 
