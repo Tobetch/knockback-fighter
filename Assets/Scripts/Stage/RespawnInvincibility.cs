@@ -44,10 +44,9 @@ public class RespawnInvincibility : MonoBehaviour
 
     public void Activate()
     {
-        if (renderers.Count == 0)
-        {
-            CacheRenderers();
-        }
+        // リスポーン時点の可視状態を基準に取り直す。
+        // これにより、後から差し替えた見た目（ペンギン）だけを点滅対象にできる。
+        CacheRenderers();
 
         invincibleUntilTime = Time.time + Mathf.Max(0f, invincibilityDuration);
         blinkVisible = false;
