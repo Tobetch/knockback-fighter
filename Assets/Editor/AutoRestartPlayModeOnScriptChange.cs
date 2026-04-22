@@ -74,6 +74,7 @@ public static class AutoRestartPlayModeOnScriptChange
         }
 
         // 既に EditMode の場合はそのまま再生し直す。
+        SessionState.SetBool(WasPlayingBeforeReloadKey, false);
         EditorApplication.delayCall += () => EditorApplication.isPlaying = true;
     }
 
