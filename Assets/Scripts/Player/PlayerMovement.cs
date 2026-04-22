@@ -18,6 +18,7 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] private float coyoteTime = 0.08f;
     [SerializeField] private float jumpMinTimeBetweenJumps = 0.08f;
     [SerializeField] private bool drawGroundCheckGizmos = true;
+    [SerializeField] private bool lockToSideViewAxis = true;
 
     private Rigidbody rb;
     private CapsuleCollider capsuleCollider;
@@ -27,6 +28,8 @@ public class PlayerMovement : MonoBehaviour
     private bool wasGroundedLastFixed;
     private RaycastHit lastGroundHit;
     private float lastJumpTime = float.NegativeInfinity;
+    private float lockedZPosition;
+    private float facingXSign = 1f;
     private readonly Collider[] overlapResults = new Collider[8];
     private readonly RaycastHit[] castHits = new RaycastHit[8];
 
@@ -41,6 +44,8 @@ public class PlayerMovement : MonoBehaviour
         // コード上のデフォルトを変えても反映されません。短すぎる値だと grounded が永遠に取れず、
         // 「入力は入っているのにジャンプできない」が再発します。最小値にクランプして安全側に倒します。
         groundCheckExtraDistance = Mathf.Max(groundCheckExtraDistance, 0.35f);
+        lockedZPosition = transform.position.z;
+        facingXSign = transform.forward.x >= 0f ? 1f : -1f;
     }
 
     private void FixedUpdate()
@@ -52,11 +57,13 @@ public class PlayerMovement : MonoBehaviour
             moveInput = Vector2.zero;
         }
 
-        Vector3 moveDirection = new Vector3(moveInput.x, 0f, moveInput.y);
+        Vector3 moveDirection = lockToSideViewAxis
+            ? new Vector3(moveInput.x, 0f, 0f)
+            : new Vector3(moveInput.x, 0f, moveInput.y);
 
         Vector3 velocity = rb.linearVelocity;
         velocity.x = moveDirection.x * moveSpeed;
-        velocity.z = moveDirection.z * moveSpeed;
+        velocity.z = lockToSideViewAxis ? 0f : moveDirection.z * moveSpeed;
 
         bool isGrounded = IsGrounded(out lastGroundHit);
         if (isGrounded)
@@ -77,9 +84,28 @@ public class PlayerMovement : MonoBehaviour
 
         rb.linearVelocity = velocity;
 
-        if (rotateToMoveDirection && moveDirection.sqrMagnitude > 0.0001f)
+        if (lockToSideViewAxis)
         {
-            transform.rotation = Quaternion.LookRotation(moveDirection, Vector3.up);
+            Vector3 p = rb.position;
+            p.z = lockedZPosition;
+            rb.position = p;
+        }
+
+        if (rotateToMoveDirection)
+        {
+            if (lockToSideViewAxis)
+            {
+                if (Mathf.Abs(moveDirection.x) > 0.0001f)
+                {
+                    facingXSign = Mathf.Sign(moveDirection.x);
+                }
+
+                transform.rotation = Quaternion.LookRotation(Vector3.right * facingXSign, Vector3.up);
+            }
+            else if (moveDirection.sqrMagnitude > 0.0001f)
+            {
+                transform.rotation = Quaternion.LookRotation(moveDirection, Vector3.up);
+            }
         }
 
         wasGroundedLastFixed = isGrounded;
